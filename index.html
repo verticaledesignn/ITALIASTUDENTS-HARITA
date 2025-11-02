@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>İtalya Bölgeleri Haritası – Üniversite Pop-up (v2) – Embed Safe</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin="anonymous"
+  />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --bg:#0d1320;            /* derin lacivert arka plan */
+      --panel:#0f1726;         /* koyu panel */
+      --accent:#c08a3e;        /* bronz */
+      --accent-2:#a46a2b;      /* koyu bronz */
+      --accent-glow:#e6b669;   /* altın vurgusu */
+      --text:#e9e4dc;          /* sıcak açık */
+      --muted:#b8a88f;         /* sönük bronz ton */
+      --border:#2a2f3d;        /* panel sınırı */
+      --danger:#e46d6d;
+      --focus: rgba(230,182,105,.55);
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif}
+    #app{display:grid;grid-template-rows:auto 1fr;min-height:100%}
+
+    header{display:flex;gap:.75rem;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0))}
+    .brand{display:flex;gap:.75rem;align-items:center}
+    .logo{width:36px;height:36px;border-radius:999px;background:radial-gradient(circle at 30% 30%, var(--accent-glow), var(--accent));box-shadow:0 8px 40px rgba(192,138,62,.35), inset 0 2px 6px rgba(255,255,255,.08);border:1px solid rgba(230,182,105,.35)}
+    .controls{display:flex;gap:.75rem;align-items:center}
+
+    /* Mobil düzen iyileştirmeleri */
+    @media (max-width: 640px){
+      header{flex-wrap:wrap;gap:.5rem}
+      .controls{width:100%;justify-content:space-between}
+      .search{flex:1;min-width:0}
+      .search input{min-width:120px;width:100%}
+      .btn{padding:.6rem .8rem;min-height:44px}
+      .uni-shell,.city-shell{margin:48px auto;padding:0 8px}
+      .uni-head,.city-head{padding:.75rem .9rem}
+      .uni-title,.city-title{font-size:clamp(1rem, 3.5vw, 1.15rem)}
+    }
+
+    .search{display:flex;align-items:center;gap:.5rem;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:.5rem .75rem}
+    .search input{background:transparent;border:none;outline:none;color:var(--text);min-width:220px}
+    .search input:focus{outline:2px solid var(--focus);outline-offset:2px;border-radius:10px}
+    .btn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:.55rem .8rem;border-radius:12px;cursor:pointer}
+    .btn:hover{border-color:#2a2d35}
+    .btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+    #map{width:100%;height:calc((var(--vh, 1vh) * 100) - 78px);background:radial-gradient(700px 700px at 20% 10%, rgba(230,182,105,.05), transparent 50%), radial-gradient(900px 900px at 80% 90%, rgba(192,138,62,.05), transparent 55%);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+    .leaflet-container{border-radius:14px}
+
+    .leaflet-control-zoom a{background:var(--panel);border-color:var(--border);color:var(--text);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+    .leaflet-popup-content-wrapper{background:#0f141f;color:var(--text);border:1px solid rgba(230,182,105,.25);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06)}
+    .leaflet-popup-tip{background:#0f141f}
+
+    .region-tip{background:rgba(16,22,33,.92);border:1px solid rgba(230,182,105,.25);color:var(--text);padding:.25rem .5rem;font-family:"Cinzel", serif;text-transform:uppercase;letter-spacing:.6px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .region-tip.leaflet-tooltip-left:before,
+    .region-tip.leaflet-tooltip-right:before{border-left-color:rgba(16,22,33,.92);border-right-color:rgba(16,22,33,.92)}
+    .leaflet-interactive{cursor:pointer}
+
+    /* Bölge etiketi (harita üzerinde, kontur DIŞINDA yazı) */
+    .region-label{position:relative;display:inline-flex;flex-direction:column;align-items:center;gap:.35rem;background:transparent;border:none;border-radius:0;padding:0;color:var(--text);box-shadow:none;max-width:520px}
+    .region-label .title{font-family:"Cinzel",serif;text-transform:uppercase;letter-spacing:.6px;color:var(--accent-glow);margin:0;font-size:1.05rem;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.08),0 -1px 0 rgba(0,0,0,.35),0 0 22px rgba(230,182,105,.15)}
+
+    /* Şehir etiketi (yalnızca isim) */
+    .city-label{display:inline-flex;align-items:center;gap:0;background:transparent;border:none;border-radius:0;padding:0;color:var(--accent-glow);font-size:1rem;line-height:1;box-shadow:none}
+    .city-label .name{font-family:"Cinzel",serif;letter-spacing:.6px;color:var(--accent-glow);font-weight:600}
+    .city-label.small{font-size:.95rem;opacity:1}
+    .city-hidden{display:none}
+
+    /* ÜNİVERSİTE SAYFASI (tam ekran) */
+    .uni-view{position:fixed;inset:0;display:none;background:linear-gradient(180deg, rgba(230,182,105,.08), rgba(13,19,32,1));z-index:9998}
+    .uni-shell{max-width:1100px;margin:64px auto;padding:0 16px}
+    .uni-card{background:#0f141f;border:1px solid rgba(230,182,105,.25);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.55);overflow:hidden}
+    .uni-head{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid rgba(230,182,105,.2)}
+    .uni-title{margin:0;font-family:"Cinzel",serif;letter-spacing:.6px;color:var(--accent-glow);text-transform:uppercase}
+    .uni-back{cursor:pointer;border:1px solid rgba(230,182,105,.3);background:#0f1726;border-radius:10px;padding:.45rem .7rem;color:var(--accent-glow);font-weight:600}
+    .uni-back:hover,.uni-back:focus{border-color:rgba(230,182,105,.7);box-shadow:0 0 0 3px rgba(230,182,105,.15) inset, 0 0 14px rgba(230,182,105,.2);outline:none;color:var(--accent-glow)}
+    .uni-body{padding:1rem 1.25rem}
+    .uni-section{margin:.5rem 0 .35rem;font-family:"Cinzel",serif;letter-spacing:.4px;text-transform:uppercase;color:var(--accent-glow)}
+    .pill{display:inline-block;margin:.15rem .3rem .15rem 0;padding:.25rem .55rem;border-radius:999px;border:1px solid rgba(230,182,105,.25);background:#0d1320;font-size:.85rem}
+
+    /* ŞEHİR SAYFASI (tam ekran) */
+    .city-view{position:fixed;inset:0;display:none;background:linear-gradient(180deg, rgba(230,182,105,.10), rgba(13,19,32,1));z-index:9998}
+    .city-shell{max-width:1100px;margin:64px auto;padding:0 16px}
+    .city-card{background:#0f141f;border:1px solid rgba(230,182,105,.25);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.55);overflow:hidden}
+    .city-head{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid rgba(230,182,105,.2)}
+    .city-title{margin:0;font-family:"Cinzel",serif;letter-spacing:.6px;color:var(--accent-glow);text-transform:uppercase}
+    .city-back{cursor:pointer;border:1px solid rgba(230,182,105,.3);background:#0f1726;border-radius:10px;padding:.45rem .7rem;color:var(--accent-glow);font-weight:600}
+    .city-back:hover,.city-back:focus{border-color:rgba(230,182,105,.7);box-shadow:0 0 0 3px rgba(230,182,105,.15) inset, 0 0 14px rgba(230,182,105,.2);outline:none;color:var(--accent-glow)}
+    /* Şehir panelinde başlık alt çizgisi */
+    .city-view .uni-section{border-bottom:1px solid rgba(230,182,105,.35);padding-bottom:.4rem;margin-bottom:.85rem}
+    /* Üniversite listesi (dikey) */
+    .uni-list{display:block}
+    .uni-vertical{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem}
+    /* Yazı stili LOGO ile aynı (Cinzel), nokta yerine okul sembolü */
+    .uni-vertical li{font-family:"Cinzel",serif;color:var(--accent-glow);letter-spacing:.3px;position:relative;padding-left:1.6rem;line-height:1.25}
+    .uni-vertical li::before{content:"";position:absolute;left:0;top:0.05rem;width:1rem;height:1rem;background-image:url("data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"%23e6b669\" d=\"M12 3l10 5-10 5L2 8l10-5z\"/><path fill=\"%23e6b669\" d=\"M6 11v3c0 2.2 2.9 4 6 4s6-1.8 6-4v-3l-6 3-6-3z\"/></svg>");background-size:contain;background-repeat:no-repeat;filter:drop-shadow(0 2px 6px rgba(230,182,105,.35))}
+
+    /* Erişilebilirlik için ekran okuyucuya özgü sınıf */
+    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+    .error{color:var(--danger);font-size:.9rem}
+
+    /* Link durumları */
+    .uni-vertical a{ color: var(--accent-glow); text-decoration:none; border-bottom:1px dashed rgba(230,182,105,.35); }
+    .uni-vertical a:visited{ color: var(--accent-glow); }
+    .uni-vertical a:hover, .uni-vertical a:focus{ color: var(--accent-glow); border-bottom-color: rgba(230,182,105,.7); filter: drop-shadow(0 0 8px rgba(230,182,105,.25)); }
+    .uni-vertical a:focus-visible{ outline:2px solid var(--accent-glow); outline-offset:2px; }
+
+    /* Kopyala rozeti */
+    .copy-link{border:1px dashed rgba(230,182,105,.35); background:#0b1320; border-radius:10px; padding:.35rem .55rem; cursor:pointer; font-size:.85rem}
+
+    /* Bölge logo (Piemonte) */
+    .region-logo{pointer-events:none}
+    .region-logo img{width:96px;height:auto;filter:drop-shadow(0 6px 22px rgba(0,0,0,.55))}
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+    </div>
+    <div class="controls">
+      <form class="search" id="regionSearchForm" role="search" aria-label="Üniversite Ara">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="10" r="6" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        <input id="regionSearch" placeholder="Üniversite ara (örn. Politecnico di Torino)" autocomplete="off" aria-label="Üniversite adı" list="uniList" />
+        <datalist id="uniList"></datalist>
+      </form>
+      <button class="btn" id="resetBtn" type="button">Haritayı sıfırla</button>
+      <button class="btn" id="backBtn" style="display:none" type="button">← Tüm İtalya</button>
+    </div>
+  </header>
+  <div id="map" role="application" aria-label="İtalya Haritası"></div>
+</div>
+
+<!-- Tam ekran ÜNİVERSİTE SAYFASI -->
+<div id="uniView" class="uni-view" aria-live="polite">
+  <div class="uni-shell">
+    <div class="uni-card" role="dialog" aria-modal="true" aria-labelledby="uniTitle">
+      <div class="uni-head">
+        <h3 class="uni-title" id="uniTitle">Üniversite</h3>
+        <div style="display:flex; gap:.5rem; align-items:center">
+          <button class="copy-link" id="uniShare" type="button" aria-label="Bağlantıyı kopyala">Kopyala</button>
+          <button class="uni-back" id="uniBack" type="button" aria-label="Bölgeye dön">← Bölgeye Dön</button>
+        </div>
+      </div>
+      <div class="uni-body" id="uniContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tam ekran ŞEHİR SAYFASI -->
+<div id="cityView" class="city-view" aria-live="polite">
+  <div class="city-shell">
+    <div class="city-card" role="dialog" aria-modal="true" aria-labelledby="cityTitle">
+      <div class="city-head">
+        <h3 class="city-title" id="cityTitle">Şehir</h3>
+        <div style="display:flex; gap:.5rem; align-items:center">
+          <button class="copy-link" id="cityShare" type="button" aria-label="Bağlantıyı kopyala">Kopyala</button>
+          <button class="city-back" id="cityBack" type="button" aria-label="Bölgeye dön">← Bölgeye Dön</button>
+        </div>
+      </div>
+      <div class="city-body" id="cityContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script>
+// —————————— UTF-8 GÜVENLİ İÇERİK / I18N ——————————
+var U = decodeURIComponent; // ASCII-only kaynakta Türkçe karakter oluşturmak için
+var I18N = {
+  pleaseEnterUni: U("L%C3%BCtfen%20bir%20%C3%BCniversite%20ad%C4%B1%20yaz%C4%B1n"),
+  noMatch: U("E%C5%9Fle%C5%9Fen%20%C3%BCniversite%20bulunamad%C4%B1"),
+  universities: U("%C3%9Cniversiteler"),
+  cityNoUni: U("Bu%20%C5%9Fehir%20i%C3%A7in%20kay%C4%B1tl%C4%B1%20%C3%BCniversite%20yok"),
+  ugPrograms: U("Lisans%20Programlar%C4%B1"),
+  gradPrograms: U("Y%C3%BCksek%20Lisans%20Programlar%C4%B1"),
+  ugMissing: U("Lisans%20programlar%C4%B1%20eklenmemi%C5%9F"),
+  gradMissing: U("Y%C3%BCksek%20lisans%20programlar%C4%B1%20eklenmemi%C5%9F"),
+  officialSite: U("Resmi%20site"),
+  linkCopied: U("Ba%C4%9Flant%C4%B1%20kopyaland%C4%B1"),
+  copyFailed: U("Kopyalama%20ba%C5%9Far%C4%B1s%C4%B1z"),
+  websiteSuffix: U("%20web%20sitesi"),
+  mdash: "\u2014"
+};
+
+// —————————— VERİ ——————————
+var DATA = {
+  "Piemonte": [
+    { city:"Torino", lat:45.0703, lng:7.6869, unis:[
+      { key:"UNITO", name:"Università di Torino", url:"https://www.unito.it" },
+      { key:"POLITO", name:"Politecnico di Torino", url:"https://www.polito.it" }
+    ]}
+  ],
+  "Lombardia": [
+    { city:"Milano", lat:45.4642, lng:9.19, unis:[
+      { name:"Politecnico di Milano", url:"https://www.polimi.it" },
+      { name:"Università degli Studi di Milano", url:"https://www.unimi.it" }
+    ]},
+    { city:"Bergamo", lat:45.6983, lng:9.6773, unis:[ { name:"Università di Bergamo", url:"https://www.unibg.it" } ]}
+  ],
+  "Veneto": [
+    { city:"Padova", lat:45.4064, lng:11.8768, unis:[ { name:"Università di Padova", url:"https://www.unipd.it" }]},
+    { city:"Venezia", lat:45.4408, lng:12.3155, unis:[ { name:"Università Ca’ Foscari Venezia", url:"https://www.unive.it" }]}
+  ],
+  "Emilia-Romagna": [
+    { city:"Bologna", lat:44.4949, lng:11.3426, unis:[ { name:"Università di Bologna", url:"https://www.unibo.it" }]},
+    { city:"Modena", lat:44.6471, lng:10.9252, unis:[ { name:"Università di Modena e Reggio Emilia", url:"https://www.unimore.it" }]}
+  ],
+  "Lazio": [
+    { city:"Roma", lat:41.9028, lng:12.4964, unis:[
+      { name:"Sapienza Università di Roma", url:"https://www.uniroma1.it" },
+      { name:"Università degli Studi di Roma Tor Vergata", url:"https://web.uniroma2.it" },
+      { name:"Università Roma Tre", url:"https://www.uniroma3.it" },
+      { name:"LUISS Guido Carli", url:"https://www.luiss.it" }
+    ]}
+  ],
+  /* Orta-İtalya */
+  "Toscana": [
+    { city:"Firenze", lat:43.7696, lng:11.2558, unis:[ { key:"UNIFI", name:"Università di Firenze", url:"https://www.unifi.it",
+      programs:{ undergrad:["Mimarlık","Tarih","Bilgisayar Bilimleri"], grad:["Mimarlık (MSc)","Veri Bilimi (MSc)","Kültürel Miras (MA)"] } } ]},
+    { city:"Pisa", lat:43.716, lng:10.4017, unis:[
+      { key:"UNIPI", name:"Università di Pisa", url:"https://www.unipi.it",
+        programs:{ undergrad:["Makine Müh.","Fizik","Ekonomi"], grad:["Robotik (MSc)","Fizik (MSc)","Ekonomi ve Yönetim (MSc)"] } },
+      { key:"SNS", name:"Scuola Normale Superiore di Pisa", url:"https://www.sns.it",
+        programs:{ undergrad:["Fen Bilimleri","Beşeri Bilimler"], grad:["Felsefe (MA)","Matematik (MSc)"] } },
+      { key:"SSSA", name:"Scuola Superiore Sant’Anna", url:"https://www.santannapisa.it",
+        programs:{ undergrad:["Sanayi Müh.","Siyaset Bilimi"], grad:["Biyomedikal Müh. (MSc)","Tarım Bilimleri (MSc)"] } }
+    ]},
+    { city:"Siena", lat:43.3188, lng:11.3308, unis:[ { key:"UNISI", name:"Università di Siena", url:"https://www.unisi.it",
+      programs:{ undergrad:["Biyoloji","Hukuk"], grad:["Biyoteknoloji (MSc)","Uluslararası İlişkiler (MA)"] } } ]}
+  ],
+  "Umbria": [
+    { city:"Perugia", lat:43.1107, lng:12.3908, unis:[ { name:"Università degli Studi di Perugia", url:"https://www.unipg.it" } ]}
+  ],
+  "Marche": [
+    { city:"Ancona", lat:43.6158, lng:13.5189, unis:[ { name:"Università Politecnica delle Marche", url:"https://www.univpm.it" } ]}
+  ],
+  /* Güney */
+  "Campania": [
+    { city:"Napoli", lat:40.8518, lng:14.2681, unis:[ { name:"Università degli Studi di Napoli Federico II", url:"https://www.unina.it" } ]}
+  ],
+  "Puglia": [
+    { city:"Bari", lat:41.1171, lng:16.8719, unis:[ { name:"Università degli Studi di Bari Aldo Moro", url:"https://www.uniba.it" }]},
+    { city:"Lecce", lat:40.3529, lng:18.1740, unis:[ { name:"Università del Salento", url:"https://www.unisalento.it" }]}
+  ],
+  "Sicilia": [
+    { city:"Palermo", lat:38.1157, lng:13.3613, unis:[ { name:"Università degli Studi di Palermo", url:"https://www.unipa.it" }]},
+    { city:"Catania", lat:37.5079, lng:15.0830, unis:[ { name:"Università degli Studi di Catania", url:"https://www.unict.it" }]}
+  ],
+  "Sardegna": [
+    { city:"Cagliari", lat:39.2238, lng:9.1217, unis:[ { name:"Università degli Studi di Cagliari", url:"https://www.unica.it" }]},
+    { city:"Sassari", lat:40.7272, lng:8.5603, unis:[ { name:"Università degli Studi di Sassari", url:"https://www.uniss.it" }]}
+  ],
+  "Liguria": [
+    { city:"Genova", lat:44.4056, lng:8.9463, unis:[ { name:"Università degli Studi di Genova", url:"https://www.unige.it" }]}
+  ],
+  "Abruzzo": [
+    { city:"L’Aquila", lat:42.3505, lng:13.3995, unis:[ { name:"Università degli Studi dell’Aquila", url:"https://www.univaq.it" }]}
+  ]
+};
+
+// —————————— HIZLI İNDEKS + AUTOCOMPLETE ——————————
+var UNI_INDEX = [];
+Object.keys(DATA).forEach(function(region){
+  (DATA[region]||[]).forEach(function(c){
+    (c.unis||[]).forEach(function(u){
+      var label = String(u.name || "");
+      UNI_INDEX.push({label:label, region:region, city:c.city, url:u.url||""});
+    });
+  });
+});
+(function buildDatalist(){
+  var dl = document.getElementById("uniList");
+  dl.innerHTML = "";
+  UNI_INDEX.forEach(function(x){ var opt=document.createElement("option"); opt.value=x.label; dl.appendChild(opt); });
+})();
+
+// —————————— HARİTA ——————————
+var map = L.map("map", { zoomControl: true, attributionControl: false, zoomSnap: 0.25, wheelPxPerZoomLevel: 90 });
+var Blank = L.TileLayer.extend({ getTileUrl: function(){ return ""; } });
+new Blank().addTo(map);
+map.setView([42.5, 12.5], 5.4);
+
+function regionStyle(){ return { color:"rgba(230,182,105,.55)", weight:1.25, fillColor:"#0b1524", fillOpacity:0.6 }; }
+function highlightStyle(){ return { weight:2, color:"#e6b669", fillColor:"#0d1b2a", fillOpacity:0.72 }; }
+function detailRegionStyle(){ return { color:"#e6b669", weight:2.2, fillColor:"#0b1524", fillOpacity:0.35 }; }
+
+var regionsLayer; // ülke genel katmanı
+var regionNameToLayer = {};
+var detailRegionLayer = null; // tek bölge katmanı
+var currentRegionName = null;
+var lastRegionGeoJSON = null; // geri dönüş için
+var regionLabelLayer = null;  // bölge yazı etiketi
+var cityLabelsLayer = null;   // şehir isim etiketleri
+var cityLabelLinesLayer = null; // şehir etiket leader-line katmanı
+var regionLogoLayer = null;   // bölge üstü logo (Piemonte için)
+
+// İtalyan uppercase (İ->I, nokta kaldır)
+function upperIt(str){
+  return (str||"").replace(/\u0130/g,"I").normalize("NFKD").replace(/\u0307/g,"").toUpperCase();
+}
+
+// Bölge etiketi sadece başlık
+function regionLabelHTML(name){
+  return "<div class=\"region-label\">"+
+         "<div class=\"title\">"+ upperIt(name) +"</div>"+
+         "</div>";
+}
+
+function getOutsideLabelLatLng(layer){
+  var b = layer.getBounds();
+  var dLat = (b.getNorth()-b.getSouth());
+  var dLng = (b.getEast()-b.getWest());
+  var extraLat = (currentRegionName === "Sicilia" || currentRegionName === "Sardegna") ? 0.12 : 0.08;
+  var extraLng = (currentRegionName === "Sicilia" || currentRegionName === "Sardegna") ? 0.12 : 0.08;
+  return L.latLng(b.getNorth() + dLat*extraLat, b.getEast() + dLng*extraLng);
+}
+
+// Label konumundan piksel bazlı kaydırılmış LatLng üret
+function shiftLatLng(baseLatLng, dxPx, dyPx){
+  var p = map.latLngToLayerPoint(baseLatLng);
+  var p2 = L.point(p.x + (dxPx||0), p.y + (dyPx||0));
+  return map.layerPointToLatLng(p2);
+}
+
+// --- LOGO YOLU ÇÖZÜMLEME (parse-time güvenli) ---
+var DEFAULT_PIEMONTE_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAF/QJ/2KqkJwAAAABJRU5ErkJggg==";
+function resolvePiemonteLogoUrl(){
+  try{
+    var u = (typeof window!=="undefined" && typeof window.PIEMONTE_LOGO_URL==="string" && window.PIEMONTE_LOGO_URL.trim()) || "";
+    if(!u) return DEFAULT_PIEMONTE_LOGO;
+    var abs = new URL(u, location.href); // hatalıysa throw
+    return abs.href;
+  }catch(e){
+    return DEFAULT_PIEMONTE_LOGO; // her durumda geçerli değer dön
+  }
+}
+
+// Piemonte için logo ekle/konumla
+function addRegionLogoIfNeeded(regionName, labelLatLng){
+  if(regionLogoLayer){ if(regionLogoLayer._repositionHandler){ map.off("zoomend", regionLogoLayer._repositionHandler); } map.removeLayer(regionLogoLayer); regionLogoLayer=null; }
+  if(regionName !== "Piemonte") return; // sadece Piemonte
+  var url = resolvePiemonteLogoUrl();
+  var testImg = new Image();
+  testImg.onload = function(){
+    var html = "<img src=\""+url+"\" alt=\"Piemonte logo\" />";
+    var icon = L.divIcon({ html: html, className:"region-logo", iconSize:[96,96], iconAnchor:[48,96] });
+    var target = shiftLatLng(labelLatLng, 0, -70);
+    regionLogoLayer = L.marker(target, { icon: icon, interactive:false, zIndexOffset: 1000 });
+    regionLogoLayer.addTo(map);
+    var handler = function(){ if(!regionLogoLayer) return; regionLogoLayer.setLatLng( shiftLatLng(labelLatLng, 0, -70) ); };
+    regionLogoLayer._repositionHandler = handler;
+    map.on("zoomend", handler);
+  };
+  testImg.onerror = function(){ console.warn("Piemonte logosu yüklenemedi:", url); };
+  testImg.src = url;
+}
+
+// GeoJSON: İtalya bölgeleri
+var ITALY_REGIONS_GEOJSON_URL = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson";
+var REGION_NAME_MAP = {
+  "Emilia-Romagna":"Emilia-Romagna",
+  "Friuli-Venezia Giulia":"Friuli-Venezia Giulia",
+  "Trentino-Alto Adige/Südtirol":"Trentino-Alto Adige/Südtirol",
+  "Valle d’Aosta/Vallée d’Aoste":"Valle d’Aosta/Vallée d’Aoste",
+  "P.A. Bolzano/Bozen":"Trentino-Alto Adige/Südtirol",
+  "P.A. Trento":"Trentino-Alto Adige/Südtirol"
+};
+function normalizeRegionKey(name){ return REGION_NAME_MAP[name] || name; }
+
+function prepareRemoteRegions(geojson){
+  var groups = {};
+  (geojson.features || []).forEach(function(feature){
+    var rawName = (feature.properties && (feature.properties.reg_name || feature.properties.name)) || "Region";
+    var key = normalizeRegionKey(rawName);
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(feature.geometry || null);
+  });
+  var features = Object.keys(groups).map(function(name){
+    var parts = groups[name] || [];
+    if(!parts.length) return null;
+    var polygons = [];
+    parts.forEach(function(geom){
+      if(!geom) return;
+      if(geom.type === "Polygon"){ polygons.push(geom.coordinates); }
+      else if(geom.type === "MultiPolygon"){ polygons = polygons.concat(geom.coordinates); }
+    });
+    if(!polygons.length) return null;
+    var geometry = polygons.length === 1 ? { type:"Polygon", coordinates: polygons[0] } : { type:"MultiPolygon", coordinates: polygons };
+    return { type:"Feature", properties:{ name:name }, geometry: geometry };
+  }).filter(Boolean);
+  return { type:"FeatureCollection", features: features };
+}
+
+// Harici ağ isteğine ihtiyaç duymadan bölge sınırlarını yaklaşık olarak oluştur
+function createRegionFeature(name){
+  var cities = DATA[name] || [];
+  if(!cities.length) return null;
+  var latValues = cities.map(function(entry){ return entry.lat; });
+  var lngValues = cities.map(function(entry){ return entry.lng; });
+  var minLat = Math.min.apply(null, latValues);
+  var maxLat = Math.max.apply(null, latValues);
+  var minLng = Math.min.apply(null, lngValues);
+  var maxLng = Math.max.apply(null, lngValues);
+  var latRange = maxLat - minLat;
+  var lngRange = maxLng - minLng;
+  var latPad = Math.max(0.28, latRange * 0.6 + 0.12);
+  var lngPad = Math.max(0.35, lngRange * 0.6 + 0.12);
+  var south = minLat - latPad;
+  var north = maxLat + latPad;
+  var west = minLng - lngPad;
+  var east = maxLng + lngPad;
+  return {
+    type: "Feature",
+    properties: { name: name },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[
+        [west, south],
+        [west, north],
+        [east, north],
+        [east, south],
+        [west, south]
+      ]]
+    }
+  };
+}
+
+var FALLBACK_REGION_GEOJSON = {
+  type: "FeatureCollection",
+  features: Object.keys(DATA).map(createRegionFeature).filter(Boolean)
+};
+
+function buildRegionsLayer(geojson){
+  if (regionsLayer) { map.removeLayer(regionsLayer); regionsLayer = null; }
+  regionNameToLayer = {};
+  regionsLayer = L.geoJSON(geojson, {
+    style: regionStyle,
+    onEachFeature: function(feature, layer){
+      var name = (feature.properties && feature.properties.name) || "Region";
+      regionNameToLayer[name] = layer;
+      layer.bindTooltip(upperIt(name), { direction:"center", sticky:true, opacity:0.95, className:"region-tip" });
+      layer.on({
+        mouseover: function(){ layer.setStyle(highlightStyle()); },
+        mouseout: function(){ regionsLayer.resetStyle(layer); },
+        click: function(){ enterDetail(name, layer.toGeoJSON()); pushHash({region:name}); }
+      });
+    }
+  }).addTo(map);
+  map.fitBounds(regionsLayer.getBounds(), { padding:[20,20] });
+}
+
+function loadRegions(){
+  return fetch(ITALY_REGIONS_GEOJSON_URL, {cache:"force-cache"})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(remote){ buildRegionsLayer(prepareRemoteRegions(remote)); hydrateFromHash(); })
+    .catch(function(err){
+      console.warn("Remote region geojson failed, using fallback", err);
+      buildRegionsLayer(FALLBACK_REGION_GEOJSON);
+      hydrateFromHash();
+      return null;
+    });
+}
+
+var regionLayerReady = loadRegions();
+
+function notifyError(msg){ alert(msg); }
+
+// —————————— DETAY MODU ——————————
+var backBtn = document.getElementById("backBtn");
+var resetBtn = document.getElementById("resetBtn");
+var uniView = document.getElementById("uniView");
+var uniTitle = document.getElementById("uniTitle");
+var uniContent = document.getElementById("uniContent");
+var uniBack = document.getElementById("uniBack");
+var uniShare = document.getElementById("uniShare");
+var cityView = document.getElementById("cityView");
+var cityTitle = document.getElementById("cityTitle");
+var cityContent = document.getElementById("cityContent");
+var cityBack = document.getElementById("cityBack");
+var cityShare = document.getElementById("cityShare");
+var regionSearch = document.getElementById("regionSearch");
+var regionSearchForm = document.getElementById("regionSearchForm");
+
+// Focus yönetimi
+var lastFocus = null;
+function trapOpen(el){ lastFocus = document.activeElement; (el.querySelector("button, a, [tabindex]")||el).focus(); }
+function trapClose(){ if(lastFocus && lastFocus.focus) lastFocus.focus(); }
+
+function renderCityLabels(regionName){
+  var cities = DATA[regionName] || [];
+  cityLabelsLayer = L.layerGroup();
+  cityLabelLinesLayer = L.layerGroup();
+  var step = 0.03; // etiket ofset yarıçapı (deg)
+  for (var i=0;i<cities.length;i++){
+    var c = cities[i];
+    var base = L.latLng(c.lat, c.lng);
+    var angle = (i % 6) * (Math.PI/3);
+    var lat = base.lat + Math.sin(angle)*step*0.6;
+    var lng = base.lng + Math.cos(angle)*step;
+    var html = "<button class=\"city-label\" data-city=\""+c.city+"\" aria-label=\""+c.city+" sehir\"><span class=\"name\">"+ upperIt(c.city) +"</span></button>";
+    var icon = L.divIcon({ html: html, className:"" });
+    var m = L.marker([lat, lng], { icon: icon, keyboard:true });
+    m.on("click", (function(reg, cityObj){ return function(){ openCityView(reg, cityObj); pushHash({region:reg, city:cityObj.city}); }; })(regionName, c));
+    cityLabelsLayer.addLayer(m);
+    var line = L.polyline([[c.lat, c.lng],[lat,lng]], { color:"#e6b669", weight:1, opacity:0.6, dashArray:"3 4" });
+    cityLabelLinesLayer.addLayer(line);
+  }
+  cityLabelLinesLayer.addTo(map);
+  cityLabelsLayer.addTo(map);
+  updateCityLabelVisibility();
+}
+
+function updateCityLabelVisibility(){
+  var z = map.getZoom();
+  var nodes = document.querySelectorAll(".city-label");
+  for (var i=0;i<nodes.length;i++){
+    var n = nodes[i];
+    if(z < 6.8){ n.classList.add("city-hidden"); n.classList.remove("small"); }
+    else if(z < 7.6){ n.classList.remove("city-hidden"); n.classList.add("small"); }
+    else { n.classList.remove("city-hidden"); n.classList.remove("small"); }
+  }
+}
+
+function enterDetail(regionName, regionGeoJSON){
+  currentRegionName = regionName;
+  lastRegionGeoJSON = regionGeoJSON;
+  if (regionsLayer) map.removeLayer(regionsLayer);
+  if (detailRegionLayer) { map.removeLayer(detailRegionLayer); detailRegionLayer=null; }
+  if (regionLabelLayer) { map.removeLayer(regionLabelLayer); regionLabelLayer=null; }
+  if (cityLabelsLayer) { map.removeLayer(cityLabelsLayer); cityLabelsLayer=null; }
+  if (cityLabelLinesLayer) { map.removeLayer(cityLabelLinesLayer); cityLabelLinesLayer=null; }
+
+  detailRegionLayer = L.geoJSON(regionGeoJSON, { style: detailRegionStyle }).addTo(map);
+  map.fitBounds(detailRegionLayer.getBounds(), { padding:[30,30] });
+
+  var labelLatLng = getOutsideLabelLatLng(detailRegionLayer);
+  var html = regionLabelHTML(regionName);
+  regionLabelLayer = L.marker(labelLatLng, { interactive:false, icon: L.divIcon({ html: html, className:"" }) }).addTo(map);
+
+  renderCityLabels(regionName);
+  addRegionLogoIfNeeded(regionName, labelLatLng);
+  backBtn.style.display = "inline-block";
+}
+
+function exitDetail(){
+  currentRegionName = null;
+  lastRegionGeoJSON = null;
+  if (regionLabelLayer) { map.removeLayer(regionLabelLayer); regionLabelLayer=null; }
+  if (detailRegionLayer) { map.removeLayer(detailRegionLayer); detailRegionLayer=null; }
+  if (cityLabelsLayer) { map.removeLayer(cityLabelsLayer); cityLabelsLayer=null; }
+  if (cityLabelLinesLayer) { map.removeLayer(cityLabelLinesLayer); cityLabelLinesLayer=null; }
+  if (regionsLayer) { regionsLayer.addTo(map); map.fitBounds(regionsLayer.getBounds(), { padding:[20,20] }); }
+  if (regionLogoLayer){ if(regionLogoLayer._repositionHandler){ map.off("zoomend", regionLogoLayer._repositionHandler);} map.removeLayer(regionLogoLayer); regionLogoLayer=null; }
+  backBtn.style.display="none";
+  uniView.style.display="none";
+  cityView.style.display="none";
+  document.getElementById("map").style.display = "block";
+}
+
+backBtn.addEventListener("click", function(){ exitDetail(); clearHash(); });
+resetBtn.addEventListener("click", function(){ exitDetail(); clearHash(); });
+map.on("zoomend", updateCityLabelVisibility);
+
+// —————————— ARAMA (Üniversite) ——————————
+regionSearchForm.addEventListener("submit", function(e){
+  e.preventDefault();
+  var q = (regionSearch.value||"").trim();
+  if(!q) { notifyError(I18N.pleaseEnterUni); return; }
+  searchUniversity(q);
+});
+regionSearch.addEventListener("input", debounce(function(){
+  var q=(regionSearch.value||"").trim();
+  if(!q) return;
+  searchUniversity(q, {open:false});
+}, 240));
+
+// Kısayollar: / odakla, Esc geri
+window.addEventListener("keydown", function(ev){
+  if(ev.key === "/" && !ev.metaKey && !ev.ctrlKey && !ev.altKey){ ev.preventDefault(); regionSearch.focus(); regionSearch.select(); }
+  if(ev.key === "Escape"){
+    if(uniView.style.display==="block"){ uniBack.click(); }
+    else if(cityView.style.display==="block"){ cityBack.click(); }
+    else if(currentRegionName){ backBtn.click(); }
+  }
+});
+
+function searchUniversity(query, opts){
+  opts = opts||{};
+  var q = normalize(query);
+  var found = null;
+  var foundRegion = null;
+  var foundCity = null;
+  Object.keys(DATA).some(function(region){
+    var cities = DATA[region]||[];
+    for(var i=0;i<cities.length;i++){
+      var c = cities[i];
+      var unis = c.unis||[];
+      for(var j=0;j<unis.length;j++){
+        var u = unis[j];
+        if(normalize(u.name).indexOf(q) > -1){ found = u; foundRegion = region; foundCity = c; return true; }
+      }
+    }
+    return false;
+  });
+  if(!found){ notifyError(I18N.noMatch); return; }
+  var layer = regionNameToLayer[foundRegion];
+  if(layer){
+    layer.bringToFront();
+    layer.setStyle(highlightStyle());
+    map.fitBounds(layer.getBounds(), { padding:[24,24] });
+    setTimeout(function(){ if(regionsLayer && layer){ regionsLayer.resetStyle(layer); } }, 600);
+    if(opts.open !== false){
+      enterDetail(foundRegion, layer.toGeoJSON());
+      openUniView(found, foundRegion, foundCity.city);
+    }
+  }
+}
+
+function normalize(s){
+  return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+function debounce(fn,ms){ var t; return function(){ var a=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(null,a); }, ms||200); } }
+
+// ŞEHİR SAYFASI — AÇ/KAPAT
+function openCityView(regionName, city){
+  if (regionLabelLayer) { map.removeLayer(regionLabelLayer); regionLabelLayer=null; }
+  if (detailRegionLayer) { map.removeLayer(detailRegionLayer); detailRegionLayer=null; }
+  if (cityLabelsLayer) { map.removeLayer(cityLabelsLayer); cityLabelsLayer=null; }
+  if (cityLabelLinesLayer) { map.removeLayer(cityLabelLinesLayer); cityLabelLinesLayer=null; }
+  document.getElementById("map").style.display = "none";
+  backBtn.style.display="none";
+
+  cityTitle.textContent = upperIt(regionName) + " " + I18N.mdash + " " + upperIt(city.city);
+  var names = (city.unis||[]).map(function(u){
+    var text = upperIt(u.name);
+    var aria = (u.name || "") + I18N.websiteSuffix;
+    return "<li><a href=\""+(u.url||"#")+"\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"vis-up\" aria-label=\""+aria+"\">"+ text +"</a><span class=\"sr-only\">"+ u.name +"</span></li>";
+  }).join("");
+  var emptyLI = "<li class=\"hint\">(" + I18N.cityNoUni + ")</li>";
+  cityContent.innerHTML = "<div class=\"uni-section\">"+I18N.universities+"</div><ul class=\"uni-vertical\">"+ (names || emptyLI) +"</ul>";
+  cityView.style.display = "block";
+  trapOpen(cityView);
+}
+
+cityBack.addEventListener("click", function(){
+  cityView.style.display = "none";
+  document.getElementById("map").style.display = "block";
+  if (lastRegionGeoJSON && currentRegionName) {
+    detailRegionLayer = L.geoJSON(lastRegionGeoJSON, { style: detailRegionStyle }).addTo(map);
+    map.fitBounds(detailRegionLayer.getBounds(), { padding:[30,30] });
+    renderCityLabels(currentRegionName);
+    var labelLatLng = getOutsideLabelLatLng(detailRegionLayer);
+    var html = regionLabelHTML(currentRegionName);
+    regionLabelLayer = L.marker(labelLatLng, { interactive:false, icon: L.divIcon({ html: html, className:"" }) }).addTo(map);
+    addRegionLogoIfNeeded(currentRegionName, labelLatLng);
+    backBtn.style.display="inline-block";
+  }
+  pushHash({region: currentRegionName});
+  trapClose();
+});
+
+// —————————— ÜNİ SAYFASI ——————————
+function openUniView(uni, region, city){
+  if (regionLabelLayer) { map.removeLayer(regionLabelLayer); regionLabelLayer=null; }
+  if (detailRegionLayer) { map.removeLayer(detailRegionLayer); detailRegionLayer=null; }
+  if (cityLabelsLayer) { map.removeLayer(cityLabelsLayer); cityLabelsLayer=null; }
+  if (cityLabelLinesLayer) { map.removeLayer(cityLabelLinesLayer); cityLabelLinesLayer=null; }
+  document.getElementById("map").style.display = "none";
+  backBtn.style.display="none";
+
+  uniTitle.textContent = uni.name + " " + I18N.mdash + " " + city + ", " + region;
+  var ug = (uni.programs && uni.programs.undergrad ? uni.programs.undergrad : []).map(function(p){return "<span class=\"pill\">"+p+"</span>";}).join("");
+  if(!ug) ug = "<span class=\"hint\">(" + I18N.ugMissing + ")</span>";
+  var gr = (uni.programs && uni.programs.grad ? uni.programs.grad : []).map(function(p){return "<span class=\"pill\">"+p+"</span>";}).join("");
+  if(!gr) gr = "<span class=\"hint\">(" + I18N.gradMissing + ")</span>";
+  var link = uni.url ? ("<div style=\"margin-top:.9rem\"><a href=\""+uni.url+"\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"pill\" aria-label=\""+uni.name+I18N.websiteSuffix+"\">"+I18N.officialSite+"</a></div>") : "";
+  uniContent.innerHTML = (
+    "<div class=\"uni-section\">"+I18N.ugPrograms+"</div>"+
+    "<div>"+ug+"</div>"+
+    "<div class=\"uni-section\" style=\"margin-top:.9rem\">"+I18N.gradPrograms+"</div>"+
+    "<div>"+gr+"</div>" + link
+  );
+  uniView.style.display = "block";
+  pushHash({region: region, city: city, uni: uni.name});
+  trapOpen(uniView);
+}
+
+uniBack.addEventListener("click", function(){
+  uniView.style.display = "none";
+  document.getElementById("map").style.display = "block";
+  if (lastRegionGeoJSON && currentRegionName) {
+    detailRegionLayer = L.geoJSON(lastRegionGeoJSON, { style: detailRegionStyle }).addTo(map);
+    map.fitBounds(detailRegionLayer.getBounds(), { padding:[30,30] });
+    renderCityLabels(currentRegionName);
+    var labelLatLng = getOutsideLabelLatLng(detailRegionLayer);
+    var html = regionLabelHTML(currentRegionName);
+    regionLabelLayer = L.marker(labelLatLng, { interactive:false, icon: L.divIcon({ html: html, className:"" }) }).addTo(map);
+    addRegionLogoIfNeeded(currentRegionName, labelLatLng);
+    backBtn.style.display="inline-block";
+  }
+  pushHash({region: currentRegionName});
+  trapClose();
+});
+
+// Paylaş/Kopyala
+function copyHash(){
+  try{ navigator.clipboard.writeText(location.href); notifyError(I18N.linkCopied); }
+  catch(e){ notifyError(I18N.copyFailed); }
+}
+uniShare.addEventListener("click", copyHash);
+cityShare.addEventListener("click", copyHash);
+
+// —————————— DERİN BAĞLANTI (URL Hash) ——————————
+function pushHash(obj){
+  var parts = [];
+  if(obj.region) parts.push("region="+encodeURIComponent(obj.region));
+  if(obj.city) parts.push("city="+encodeURIComponent(obj.city));
+  if(obj.uni) parts.push("uni="+encodeURIComponent(obj.uni));
+  var h = "#"+parts.join("&");
+  if(location.hash !== h){ location.hash = h; }
+}
+function clearHash(){ if(location.hash) location.hash = ""; }
+function getHashParams(){
+  var h = (location.hash||"").replace(/^#/, "");
+  var out = {};
+  h.split("&").forEach(function(pair){ if(!pair) return; var i = pair.indexOf("="); if(i<0) return; out[decodeURIComponent(pair.slice(0,i))] = decodeURIComponent(pair.slice(i+1)); });
+  return out;
+}
+function hydrateFromHash(){
+  var p = getHashParams();
+  if(!p.region) return;
+  var layer = regionNameToLayer[p.region];
+  if(layer){ enterDetail(p.region, layer.toGeoJSON()); }
+  if(p.city){
+    var cities = DATA[p.region]||[];
+    var c = cities.find(function(x){ return x.city === p.city; });
+    if(c){ openCityView(p.region, c); }
+    if(c && p.uni){ var f = (c.unis||[]).find(function(u){ return u.name === p.uni; }); if(f){ openUniView(f, p.region, c.city); } }
+  }
+}
+window.addEventListener("hashchange", function(){ hydrateFromHash(); });
+
+// —————————— MOBİL 100vh DÜZELTME (iOS/Android adres çubuğu) ——————————
+function setVH(){
+  var vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty("--vh", vh + "px");
+}
+setVH();
+window.addEventListener("resize", setVH);
+
+// —————————— TESTLER ——————————
+(function tests(){
+  function run(){
+    try{
+      console.assert(upperIt("\u0130talya")==="ITALYA", "upperIt should convert dotted capital I");
+      var dl = document.getElementById("uniList");
+      console.assert(dl.children.length === UNI_INDEX.length, "datalist size matches index");
+      console.assert(normalize("Caf\u00e9")==="cafe", "normalize removes accents");
+      console.assert(Object.keys(DATA).length === FALLBACK_REGION_GEOJSON.features.length, "region geojson feature count matches data regions");
+      console.assert(Object.keys(DATA).every(function(name){ return !!regionNameToLayer[name]; }), "all region layers registered");
+
+      // Yeni testler: logo URL çözücü
+      var prev = window.PIEMONTE_LOGO_URL;
+      window.PIEMONTE_LOGO_URL = "https://example.com/logo.png";
+      console.assert(/example\.com/.test(resolvePiemonteLogoUrl()), "resolvePiemonteLogoUrl should return absolute URL when valid");
+      window.PIEMONTE_LOGO_URL = "sandbox:/mnt/data/18_transparan.png"; // geçersiz
+      console.assert(/^data:/.test(resolvePiemonteLogoUrl()), "resolvePiemonteLogoUrl should fall back to data: when invalid");
+      window.PIEMONTE_LOGO_URL = prev; // restore
+
+      // Ek testler: ASCII tek tırnak (\u0027) yerine sağ tek tırnak (’)
+      var asciiApostrophePresent = /\u0027/.test(document.documentElement.innerHTML);
+      console.assert(!asciiApostrophePresent, "ASCII apostrof (\u0027) içermemeli – embed güvenliği için dönüştürüldü");
+
+      // Ek testler: datalist option içeriği bozuk değil
+      var invalidOpt = Array.from(dl.children).some(function(o){ return /[\u0000-\u001F]/.test(o.value || ""); });
+      console.assert(!invalidOpt, "Datalist değerlerinde kontrol karakteri olmamalı");
+
+      console.log("[Tests] all assertions passed");
+    }catch(e){ console.error("[Tests] failed", e); }
+  }
+
+  if (regionLayerReady && typeof regionLayerReady.then === "function"){
+    regionLayerReady.then(run);
+  } else {
+    run();
+  }
+})();
+</script>
+</body>
+</html>
